@@ -31,13 +31,6 @@ impl<T: Copy + bytemuck::NoUninit + bytemuck::AnyBitPattern> SimpleGpuMemory<T> 
             .iter_mut()
             .find(|other_range| range_collide(&range, other_range))
         {
-            let max_start = other_range.start.max(range.start);
-            let min_end = other_range.end.min(range.end);
-
-            if max_start < min_end {
-                self.allocated_count -= (max_start..min_end).len() / core::mem::size_of::<T>();
-            }
-
             other_range.start = other_range.start.min(range.start);
             other_range.end = other_range.end.max(range.end);
         } else if let Some(other_range_index) = self
@@ -45,10 +38,8 @@ impl<T: Copy + bytemuck::NoUninit + bytemuck::AnyBitPattern> SimpleGpuMemory<T> 
             .iter()
             .position(|other_range| other_range.start < range.end)
         {
-            self.allocated_count -= range.len() / core::mem::size_of::<T>();
             self.available_ranges.insert(other_range_index, range);
         } else {
-            self.allocated_count -= range.len() / core::mem::size_of::<T>();
             self.available_ranges.push(range);
         }
     }
@@ -214,15 +205,18 @@ impl<T: Copy + bytemuck::NoUninit + bytemuck::AnyBitPattern> GpuMemory<T> for Si
 
         match self.used_ranges[*index].len().cmp(&size) {
             Ordering::Less => {
-                self.mutated = true;
-
-                self.make_range_available(range.start..(range.end - size));
-                self.used_ranges[*index].start = range.end - size;
+                self.free(*index);
+                *index = self.allocate(len);
             }
             Ordering::Equal => (),
             Ordering::Greater => {
-                self.free(*index);
-                *index = self.allocate(len);
+                self.mutated = true;
+
+                let free_range = range.start..(range.end - size);
+                self.allocated_count -= free_range.len() / core::mem::size_of::<T>();
+                self.make_range_available(free_range);
+
+                self.used_ranges[*index].start = range.end - size;
             }
         }
     }
@@ -231,6 +225,8 @@ impl<T: Copy + bytemuck::NoUninit + bytemuck::AnyBitPattern> GpuMemory<T> for Si
         self.mutated = true;
 
         if let Some(range) = self.used_ranges.remove(index) {
+            self.allocated_count -= range.len() / core::mem::size_of::<T>();
+
             self.make_range_available(range);
         }
     }
