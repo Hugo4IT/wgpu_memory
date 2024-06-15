@@ -1,7 +1,7 @@
 use std::mem::size_of;
 
 use common::{get_wgpu, Entity};
-use wgpu_memory::{simple::SimpleGpuMemory, GpuMemory};
+use wgpu_memory::{auto_drop::AutoDropping, simple::SimpleGpuMemory, GpuMemory};
 
 mod common;
 
@@ -9,14 +9,16 @@ mod common;
 fn allocations_work() {
     let wgpu = get_wgpu();
 
-    let mut mem = SimpleGpuMemory::new(wgpu::BufferUsages::empty(), &wgpu.device);
+    let mut mem = AutoDropping::<Entity, SimpleGpuMemory<Entity>>::new(
+        wgpu::BufferUsages::empty(),
+        &wgpu.device,
+    );
 
     for _ in 0..100 {
         let index = mem.allocate(1);
         assert_eq!(mem.size(), size_of::<Entity>());
 
         mem.get(&index)[0] = Entity { param: 1 };
-        mem.free(index);
     }
 
     assert_eq!(mem.size(), 0);
@@ -26,7 +28,10 @@ fn allocations_work() {
 fn resize_works() {
     let wgpu = get_wgpu();
 
-    let mut mem = SimpleGpuMemory::new(wgpu::BufferUsages::empty(), &wgpu.device);
+    let mut mem = AutoDropping::<Entity, SimpleGpuMemory<Entity>>::new(
+        wgpu::BufferUsages::empty(),
+        &wgpu.device,
+    );
 
     for _ in 0..100 {
         let mut index = mem.allocate(1);
@@ -47,8 +52,6 @@ fn resize_works() {
         for i in 0..5 {
             mem.get(&index)[i] = Entity { param: i as u32 };
         }
-
-        mem.free(index);
     }
 
     assert_eq!(mem.size(), 0);
@@ -58,14 +61,19 @@ fn resize_works() {
 fn free_works() {
     let wgpu = get_wgpu();
 
-    let mut mem = SimpleGpuMemory::new(wgpu::BufferUsages::empty(), &wgpu.device);
+    let mut mem = AutoDropping::<Entity, SimpleGpuMemory<Entity>>::new(
+        wgpu::BufferUsages::empty(),
+        &wgpu.device,
+    );
 
     for _ in 0..100 {
-        let index = mem.allocate(1);
-        assert_eq!(mem.size(), size_of::<Entity>());
+        {
+            let index = mem.allocate(1);
+            assert_eq!(mem.size(), size_of::<Entity>());
 
-        mem.get(&index)[0] = Entity { param: 1 };
-        mem.free(index);
+            mem.get(&index)[0] = Entity { param: 1 };
+        }
+
         assert_eq!(mem.size(), 0);
     }
 
