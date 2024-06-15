@@ -1,4 +1,14 @@
-# `wgpu_memory`
+# `wgpu_memory` <!-- omit from toc -->
+
+- [Usage](#usage)
+- [Performance](#performance)
+- [Memory Efficiency](#memory-efficiency)
+- [Quick Reference](#quick-reference)
+  - [`SimpleGpuMemory<T>`](#simplegpumemoryt)
+    - [Example](#example)
+  - [`AutoDropping<T, M: GpuMemory<T>>`](#autodroppingt-m-gpumemoryt)
+    - [Example](#example-1)
+
 
 An abstraction over a `wgpu::Buffer` that supports allocating and freeing memory
 like standard library functions, but for memory on the GPU. A quick and dirty
@@ -174,11 +184,11 @@ There are 2 built-in implementations of this trait:
 
 Uses a normal buffer, adding `COPY_DST` to the buffer usages.
 
-### `type Index = struct AddressId`
+### `type Index = struct AddressId` <!-- omit from toc -->
 
 An index to a list of address ranges in the buffer
 
-### `type OptimizationStrategy = enum Strategy`
+### `type OptimizationStrategy = enum Strategy` <!-- omit from toc -->
 
 - `Truncate`: delete unused memory and resize the buffer to the smallest
   possible size to fit allocated items
@@ -186,6 +196,8 @@ An index to a list of address ranges in the buffer
   regions by their length from longest to shortest
 - `SortSizeAscending`: same as `Truncate` but also sorts allocated memory
   regions by their length from shortest to longest
+
+### Example
 
 ```rs
 let mut mem = SimpleGpuMemory::<Entity>::new(wgpu::BufferUsages::VERTEX, &device);
@@ -210,11 +222,11 @@ at a slight cost to every operation on the buffer, so consider this a choice
 of developer experience over user experience. The performance hit is trivial
 if the buffer isn't written to thousands of times every frame.
 
-### `type Index = M::Index`
+### `type Index = M::Index` <!-- omit from toc -->
 
 The inner `Index`
 
-### `type OptimizationStrategy = M::OptimizationStrategy`
+### `type OptimizationStrategy = M::OptimizationStrategy` <!-- omit from toc -->
 
 The inner `OptimizationStrategy`
 
