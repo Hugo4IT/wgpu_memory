@@ -25,20 +25,26 @@ pub struct SimpleGpuMemory<T: Copy + bytemuck::NoUninit + bytemuck::AnyBitPatter
 }
 
 impl<T: Copy + bytemuck::NoUninit + bytemuck::AnyBitPattern> SimpleGpuMemory<T> {
-    fn make_range_available(&mut self, range: AddressRange) {
-        if let Some(other_range) = self
-            .available_ranges
-            .iter_mut()
-            .find(|other_range| range_collide(&range, other_range))
+    fn merge_available_ranges(&mut self, index: usize) {
+        while index + 1 < self.available_ranges.len()
+            && self.available_ranges[index].end >= self.available_ranges[index + 1].start
         {
-            other_range.start = other_range.start.min(range.start);
-            other_range.end = other_range.end.max(range.end);
-        } else if let Some(other_range_index) = self
+            let right = self.available_ranges.remove(index + 1);
+            let left = &mut self.available_ranges[index];
+
+            left.start = left.start.min(right.start);
+            left.end = left.end.max(right.end);
+        }
+    }
+
+    fn make_range_available(&mut self, range: AddressRange) {
+        if let Some(other_range_index) = self
             .available_ranges
             .iter()
-            .position(|other_range| other_range.start < range.end)
+            .position(|other_range| other_range.start <= range.end)
         {
             self.available_ranges.insert(other_range_index, range);
+            self.merge_available_ranges(other_range_index);
         } else {
             self.available_ranges.push(range);
         }
@@ -312,10 +318,4 @@ impl<T: Copy + bytemuck::NoUninit + bytemuck::AnyBitPattern> GpuMemory<T> for Si
     fn buffer_slice(&self) -> wgpu::BufferSlice {
         self.buffer.slice(..(self.size() as u64))
     }
-}
-
-#[inline]
-fn range_collide(a: &AddressRange, b: &AddressRange) -> bool {
-    (a.start.saturating_sub(1)..(a.end + 1)).contains(&b.start)
-        || (a.start.saturating_sub(1)..(a.end + 1)).contains(&b.end)
 }
