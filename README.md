@@ -192,10 +192,14 @@ An index to a list of address ranges in the buffer
 
 - `Truncate`: delete unused memory and resize the buffer to the smallest
   possible size to fit allocated items
-- `SortSizeDescending`: same as `Truncate` but also sorts allocated memory
-  regions by their length from longest to shortest
-- `SortSizeAscending`: same as `Truncate` but also sorts allocated memory
-  regions by their length from shortest to longest
+- `SortSizeDescending`: sorts allocated memory regions by their length
+  from longest to shortest. This does not save any memory by itself,
+  however it could make some future operations faster based on the kind
+  of data stored in the buffer.
+- `SortSizeAscending`: sorts allocated memory regions by their length
+  from shortest to longest. This does not save any memory by itself,
+  however it could make some future operations faster based on the kind
+  of data stored in the buffer.
 
 ### Example
 

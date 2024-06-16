@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, marker::PhantomData, ops::Range, time::Instant};
+use std::{cmp::Ordering, marker::PhantomData, ops::Range};
 
 use humansize::{format_size, DECIMAL};
 use itertools::Itertools;
@@ -98,10 +98,14 @@ impl<T: Copy + bytemuck::NoUninit + bytemuck::AnyBitPattern> SimpleGpuMemory<T> 
 
 /// - `Truncate`: delete unused memory and resize the buffer to the smallest
 ///   possible size to fit allocated items
-/// - `SortSizeDescending`: same as `Truncate` but also sorts allocated memory
-///   regions by their length from longest to shortest
-/// - `SortSizeAscending`: same as `Truncate` but also sorts allocated memory
-///   regions by their length from shortest to longest
+/// - `SortSizeDescending`: sorts allocated memory regions by their length
+///   from longest to shortest. This does not save any memory by itself,
+///   however it could make some future operations faster based on the kind
+///   of data stored in the buffer.
+/// - `SortSizeAscending`: sorts allocated memory regions by their length
+///   from shortest to longest. This does not save any memory by itself,
+///   however it could make some future operations faster based on the kind
+///   of data stored in the buffer.
 #[derive(Debug, Clone, Copy, Default)]
 pub enum Strategy {
     #[default]
@@ -257,32 +261,33 @@ impl<T: Copy + bytemuck::NoUninit + bytemuck::AnyBitPattern> GpuMemory<T> for Si
     ) {
         let size = self.size();
 
-        if self.buffer.size() <= size as u64 {
-            return;
-        }
-
-        log::trace!(
-            "Truncating GPU buffer of size {} to {}",
-            format_size(self.buffer.size(), DECIMAL),
-            format_size(size, DECIMAL)
-        );
-
-        #[cfg(feature = "log_diagnostics")]
-        let perf_start = Instant::now();
-
-        self.fix_sequence();
-
-        self.buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("wgpu_text Resized Buffer"),
-            usage: self.buffer.usage() | wgpu::BufferUsages::COPY_DST,
-            contents: &self.data,
-        });
-
-        let capacity_before = self.data.capacity();
-
         match strategy {
             Strategy::Truncate => {
+                self.fix_sequence();
+
+                log::trace!(
+                    "Truncating GPU buffer of size {} to {}",
+                    format_size(self.buffer.size(), DECIMAL),
+                    format_size(size, DECIMAL)
+                );
+
+                self.buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("wgpu_text Resized Buffer"),
+                    usage: self.buffer.usage() | wgpu::BufferUsages::COPY_DST,
+                    contents: &self.data,
+                });
+
+                let capacity_before = self.data.capacity();
+
                 self.data.shrink_to_fit();
+
+                if capacity_before != self.data.capacity() {
+                    log::trace!(
+                        "Truncated CPU buffer of size {} to {}",
+                        format_size(capacity_before, DECIMAL),
+                        format_size(self.data.capacity(), DECIMAL)
+                    );
+                }
             }
             Strategy::SortSizeDescending => {
                 self.sort(true);
@@ -290,24 +295,6 @@ impl<T: Copy + bytemuck::NoUninit + bytemuck::AnyBitPattern> GpuMemory<T> for Si
             Strategy::SortSizeAscending => {
                 self.sort(false);
             }
-        }
-
-        if capacity_before != self.data.capacity() {
-            log::trace!(
-                "Truncated CPU buffer of size {} to {}",
-                format_size(capacity_before, DECIMAL),
-                format_size(self.data.capacity(), DECIMAL)
-            );
-        }
-
-        #[cfg(feature = "log_diagnostics")]
-        {
-            let perf_end = Instant::now();
-
-            log::trace!(
-                "Truncating took {:.05}s",
-                (perf_end - perf_start).as_secs_f32()
-            );
         }
     }
 
